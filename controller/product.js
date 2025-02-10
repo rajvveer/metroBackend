@@ -300,5 +300,44 @@ router.get(
     });
   })
 );
+router.get(
+  "/search",
+  catchAsyncErrors(async (req, res, next) => {
+    // Get query parameters from request
+    const { query, minRating, expressDelivery, sortBy } = req.query;
+    let filter = {};
+
+    // Search by name using regex if a query string is provided
+    if (query) {
+      filter.name = { $regex: new RegExp(query, "i") };
+    }
+
+    // Optionally, filter by minimum rating if provided
+    if (minRating) {
+      filter.rating = { $gte: Number(minRating) };
+    }
+
+    // Optionally, filter for express delivery (expects "true")
+    if (expressDelivery === "true") {
+      filter.expressDelivery = true;
+    }
+
+    // Fetch products matching the filter
+    let products = await Product.find(filter).sort({ createdAt: -1 });
+
+    // Apply client-side sorting if needed
+    if (sortBy === "priceLowHigh") {
+      products.sort((a, b) => a.discountPrice - b.discountPrice);
+    } else if (sortBy === "priceHighLow") {
+      products.sort((a, b) => b.discountPrice - a.discountPrice);
+    }
+
+    res.status(200).json({
+      success: true,
+      products,
+    });
+  })
+);
+
 
 module.exports = router;
