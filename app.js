@@ -55,6 +55,7 @@
 
 // module.exports = app;
 // app.js
+// app.js
 const express = require("express");
 const ErrorHandler = require("./middleware/error");
 const app = express();
@@ -62,6 +63,7 @@ const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 
+// Set up CORS for your website domain
 app.use(
   cors({
     origin: "https://gravoapp.com",
@@ -69,11 +71,16 @@ app.use(
   })
 );
 
+// Parse JSON bodies with an increased size limit
 app.use(express.json({ limit: "50mb" }));
 app.use(cookieParser());
+
+// A simple test endpoint
 app.use("/test", (req, res) => {
   res.send("Hello world!");
 });
+
+// Parse URL-encoded bodies
 app.use(
   bodyParser.urlencoded({
     extended: true,
@@ -82,14 +89,14 @@ app.use(
   })
 );
 
-// config
+// Load environment variables if not in production
 if (process.env.NODE_ENV !== "PRODUCTION") {
   require("dotenv").config({
     path: "config/.env",
   });
 }
 
-// import routes for your website
+// Import routes for website users
 const user = require("./controller/user");
 const shop = require("./controller/shop");
 const product = require("./controller/product");
@@ -104,8 +111,13 @@ const withdraw = require("./controller/withdraw");
 // Import the OTP routes for mobile app login
 const otpUser = require("./controller/otpUser");
 
-app.use("/api/v2/user", user);
-app.use("/api/v2/otp", otpUser); // OTP endpoints are now under /api/v2/otp
+// (Optional) Import admin routes if needed later
+// const admin = require("./controller/admin");
+
+// Mount routes
+app.use("/api/v2/user", user);      // Website user routes
+app.use("/api/v2/otp", otpUser);      // OTP endpoints for mobile app users
+// app.use("/api/v2/admin", admin);   // Admin routes (for later use)
 app.use("/api/v2/conversation", conversation);
 app.use("/api/v2/message", message);
 app.use("/api/v2/order", order);
@@ -116,7 +128,7 @@ app.use("/api/v2/coupon", coupon);
 app.use("/api/v2/payment", payment);
 app.use("/api/v2/withdraw", withdraw);
 
-// Error handling middleware (should be last)
+// Error handling middleware (must be last)
 app.use(ErrorHandler);
 
 module.exports = app;
