@@ -150,4 +150,17 @@ router.put(
   })
 );
 
+// =====================================================================
+// @route   GET /api/v2/otp/profile
+// @desc    Get OTP user profile
+// @access  Private (requires OTP user to be logged in)
+// =====================================================================
+router.get(
+  "/profile",
+  isAuthenticatedOtp,
+  catchAsyncErrors(async (req, res, next) => {
+    res.status(200).json({ success: true, user: req.user });
+  })
+);
+
 module.exports = router;
