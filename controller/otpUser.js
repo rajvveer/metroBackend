@@ -3,7 +3,7 @@ const express = require("express");
 const router = express.Router();
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const ErrorHandler = require("../middleware/error");
-const UserOtp = require("../models/UserOtp");
+const UserOtp = require("../model/UserOtp");
 const sendOtp = require("../utils/sendOtp");
 const jwt = require("jsonwebtoken");
 
