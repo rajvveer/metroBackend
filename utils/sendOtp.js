@@ -1,11 +1,15 @@
 // utils/sendotp.js
 const twilio = require("twilio");
 
-// Hardcoded Twilio credentials (for testing purposes only)
-// In production, use environment variables to store these securely.
-const accountSid = "ACf5986d5966afe07d3b7c78dcabf497c3";
-const authToken = "00dd2d268e5546726b19d4f400bfc6b7";
-const twilioNumber = "+18453735527";
+// Load Twilio credentials from environment variables
+const accountSid = process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
+const twilioNumber = process.env.TWILIO_NUMBER;
+
+// Check that all required credentials are provided
+if (!accountSid || !authToken || !twilioNumber) {
+  console.error("Twilio credentials are missing in the environment variables.");
+}
 
 const client = twilio(accountSid, authToken);
 
