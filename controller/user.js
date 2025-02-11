@@ -9,7 +9,7 @@ const sendMail = require("../utils/sendMail");
 const sendToken = require("../utils/jwtToken");
 const { isAuthenticated, isAdmin } = require("../middleware/auth");
 const twilio = require('twilio');
-
+const sendOtp = require("../utils/sendOtp");
 // create user
 router.post("/create-user", async (req, res, next) => {
   try {
@@ -414,6 +414,86 @@ router.delete(
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
+  })
+);
+router.post(
+  "/send-otp",
+  catchAsyncErrors(async (req, res, next) => {
+    const { phone } = req.body;
+    if (!phone) {
+      return next(new ErrorHandler("Phone number is required", 400));
+    }
+
+    // Generate a random 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiry = Date.now() + 5 * 60 * 1000; // valid for 5 minutes
+
+    // Try to find the user by phone number
+    let user = await User.findOne({ phone });
+    if (user) {
+      // If user exists, update the OTP fields
+      user.otp = otp;
+      user.otpExpiration = otpExpiry;
+      await user.save();
+
+      // Send the OTP via Twilio
+      await sendOtp(phone, otp);
+      return res.status(200).json({
+        success: true,
+        message: `OTP sent for login to ${phone}`,
+      });
+    } else {
+      // If user doesn't exist, create a new user record with the phone number and OTP fields
+      user = await User.create({ phone, otp, otpExpiration: otpExpiry });
+      await sendOtp(phone, otp);
+      return res.status(200).json({
+        success: true,
+        message: `OTP sent for registration to ${phone}`,
+      });
+    }
+  })
+);
+
+// =====================================================================
+// @route   POST /api/v2/user/verify-otp
+// @desc    Verify OTP and log in or register the user
+// @access  Public
+// =====================================================================
+router.post(
+  "/verify-otp",
+  catchAsyncErrors(async (req, res, next) => {
+    const { phone, otp } = req.body;
+    if (!phone || !otp) {
+      return next(new ErrorHandler("Both phone number and OTP are required", 400));
+    }
+
+    const user = await User.findOne({ phone });
+    if (!user) {
+      return next(new ErrorHandler("User not found. Please register first.", 404));
+    }
+
+    if (user.otp !== otp) {
+      return next(new ErrorHandler("Invalid OTP", 400));
+    }
+
+    if (user.otpExpiration < Date.now()) {
+      return next(new ErrorHandler("OTP has expired", 400));
+    }
+
+    // OTP is valid – mark the user as verified and clear the OTP fields
+    user.isVerified = true;
+    user.otp = undefined;
+    user.otpExpiration = undefined;
+    await user.save();
+
+    // Generate a token (using the method from the user model)
+    const token = user.getJwtToken();
+
+    res.status(200).json({
+      success: true,
+      message: "OTP verified successfully. User logged in.",
+      token,
+    });
   })
 );
 
