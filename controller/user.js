@@ -429,7 +429,7 @@ router.post(
     const otpExpiry = Date.now() + 5 * 60 * 1000; // valid for 5 minutes
 
     // Try to find the user by phone number
-    let user = await User.findOne({ phone });
+    let user = await User.findOne({ mobileNumber: phone });
     if (user) {
       // If user exists, update the OTP fields
       user.otp = otp;
@@ -443,8 +443,14 @@ router.post(
         message: `OTP sent for login to ${phone}`,
       });
     } else {
-      // If user doesn't exist, create a new user record with the phone number and OTP fields
-      user = await User.create({ phone, otp, otpExpiration: otpExpiry });
+      // If user doesn't exist, create a new user record with the mobile number.
+      // IMPORTANT: Explicitly set authType to "otp" to avoid triggering email-related validations.
+      user = await User.create({ 
+        authType: "otp", 
+        mobileNumber: phone, 
+        otp, 
+        otpExpiration: otpExpiry 
+      });
       await sendOtp(phone, otp);
       return res.status(200).json({
         success: true,
@@ -467,7 +473,7 @@ router.post(
       return next(new ErrorHandler("Both phone number and OTP are required", 400));
     }
 
-    const user = await User.findOne({ phone });
+    const user = await User.findOne({ mobileNumber: phone });
     if (!user) {
       return next(new ErrorHandler("User not found. Please register first.", 404));
     }
