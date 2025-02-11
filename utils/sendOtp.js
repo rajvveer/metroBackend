@@ -3,9 +3,9 @@ const twilio = require("twilio");
 
 // Hardcoded Twilio credentials (for testing purposes only)
 // In production, use environment variables to store these securely.
-const accountSid = "AC55a86419cb6e20a9e5efeccb2cbcc521";
-const authToken = "bf6af1f37ad636be6670474196761d41";
-const twilioNumber = "+18315151863";
+const accountSid = "ACf5986d5966afe07d3b7c78dcabf497c3";
+const authToken = "00dd2d268e5546726b19d4f400bfc6b7";
+const twilioNumber = "+18453735527";
 
 const client = twilio(accountSid, authToken);
 
