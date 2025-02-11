@@ -108,7 +108,16 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 const userSchema = new mongoose.Schema({
-  // For website (email/password) authentication:
+  // Determines the authentication method.
+  // "email" for website (email/password) login,
+  // "otp" for mobile app (OTP) login.
+  authType: {
+    type: String,
+    enum: ["email", "otp"],
+    default: "email",
+  },
+
+  // Fields required only for email-based authentication.
   name: {
     type: String,
     required: function () {
@@ -120,6 +129,9 @@ const userSchema = new mongoose.Schema({
     required: function () {
       return this.authType === "email";
     },
+    unique: function () {
+      return this.authType === "email";
+    },
   },
   password: {
     type: String,
@@ -129,12 +141,36 @@ const userSchema = new mongoose.Schema({
     minLength: [8, "Password should be at least 8 characters"],
     select: false,
   },
-
-  // (Legacy) phoneNumber field (if needed)
-  phoneNumber: {
-    type: Number,
+  avatar: {
+    public_id: String,
+    url: {
+      type: String,
+      required: function () {
+        return this.authType === "email";
+      },
+    },
   },
 
+  // Field required only for OTP-based authentication.
+  mobileNumber: {
+    type: String,
+    required: function () {
+      return this.authType === "otp";
+    },
+    unique: function () {
+      return this.authType === "otp";
+    },
+  },
+
+  // OTP and OTP expiration (for OTP-based login)
+  otp: String,
+  otpExpiration: Date,
+  isVerified: {
+    type: Boolean,
+    default: false,
+  },
+
+  // Other common fields
   addresses: [
     {
       country: { type: String },
@@ -145,73 +181,38 @@ const userSchema = new mongoose.Schema({
       addressType: { type: String },
     },
   ],
-
   role: {
     type: String,
     default: "user",
   },
-
-  avatar: {
-    public_id: { type: String },
-    url: { type: String, required: true },
-  },
-
-  // For OTP-based (mobile app) authentication:
-  mobileNumber: {
-    type: String,
-    required: function () {
-      return this.authType === "otp";
-    },
-  },
-  otp: {
-    type: String,
-  },
-  otpExpiration: {
-    type: Date,
-  },
-  isVerified: {
-    type: Boolean,
-    default: false,
-  },
-
-  // Use authType to differentiate between website and app accounts.
-  // Website accounts: authType = "email" (email and password are required)
-  // App accounts: authType = "otp" (mobileNumber is required, and OTP is used for login)
-  authType: {
-    type: String,
-    enum: ["email", "otp"],
-    default: "email",
-  },
-
   createdAt: {
     type: Date,
     default: Date.now,
   },
-
   resetPasswordToken: String,
   resetPasswordTime: Date,
 });
 
-// Pre-save hook to hash the password when using email authentication.
+// Pre-save hook to hash the password only for email-based accounts.
 userSchema.pre("save", async function (next) {
-  // Only hash the password if the user is using email auth and if the password was modified.
   if (this.authType === "email" && this.isModified("password")) {
     this.password = await bcrypt.hash(this.password, 10);
   }
   next();
 });
 
-// Generate a JWT token (usable for both auth methods)
+// Instance method to generate a JWT token.
 userSchema.methods.getJwtToken = function () {
   return jwt.sign({ id: this._id }, process.env.JWT_SECRET_KEY, {
     expiresIn: process.env.JWT_EXPIRES,
   });
 };
 
-// Compare password (only used for email/password logins)
+// Instance method to compare password (only used for email logins).
 userSchema.methods.comparePassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
 module.exports = mongoose.model("User", userSchema);
+
 
