@@ -445,6 +445,7 @@ router.post(
 // ----------------------------
 // Verify OTP for Shop Registration
 // ----------------------------
+// Verify OTP for Shop Registration
 router.post(
   "/verify-otp",
   catchAsyncErrors(async (req, res, next) => {
@@ -453,26 +454,33 @@ router.post(
       if (!phoneNumber || !otp) {
         return next(new ErrorHandler("Both phone number and OTP are required", 400));
       }
-      
+
       const shop = await Shop.findOne({ phoneNumber });
       if (!shop) {
         return next(new ErrorHandler("Shop not found. Please register first.", 404));
       }
-      
-      if (shop.otp !== otp) {
+
+      // Convert both values to strings to avoid type mismatch
+      const providedOtp = otp.toString();
+      const storedOtp = shop.otp ? shop.otp.toString() : "";
+
+      console.log("Stored OTP:", storedOtp); // For debugging
+      console.log("Provided OTP:", providedOtp); // For debugging
+
+      if (storedOtp !== providedOtp) {
         return next(new ErrorHandler("Invalid OTP", 400));
       }
-      
+
       if (shop.otpExpiration < Date.now()) {
         return next(new ErrorHandler("OTP has expired", 400));
       }
-      
+
       // OTP is valid – mark shop as verified and clear OTP fields
       shop.isVerified = true;
       shop.otp = undefined;
       shop.otpExpiration = undefined;
       await shop.save();
-      
+
       // Issue JWT token for the seller
       sendShopToken(shop, 201, res);
     } catch (error) {
@@ -480,6 +488,7 @@ router.post(
     }
   })
 );
+
 
 // ----------------------------
 // Seller Login
