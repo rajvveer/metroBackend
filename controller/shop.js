@@ -376,7 +376,7 @@ const sendShopToken = require("../utils/shopToken");
 const { isAuthenticated, isSeller, isAdmin } = require("../middleware/auth");
 
 // ----------------------------
-// Seller Registration with OTP (sent to email & mobile)
+// Seller Registration with OTP sent to both email and mobile
 // ----------------------------
 router.post(
   "/create-shop",
@@ -392,9 +392,9 @@ router.post(
         return next(new ErrorHandler("Shop already exists", 400));
       }
       
-      // Upload avatar if provided
+      // Upload avatar if provided; otherwise, use default empty values.
       let avatarData = { public_id: "", url: "" };
-      if (req.body.avatar) {
+      if (req.body.avatar && req.body.avatar.trim() !== "") {
         const myCloud = await cloudinary.v2.uploader.upload(req.body.avatar, {
           folder: "avatars",
         });
@@ -434,7 +434,7 @@ router.post(
       
       res.status(201).json({
         success: true,
-        message: `OTP sent to ${phoneNumber} and ${email}. Please verify to complete registration.`
+        message: `OTP sent to ${phoneNumber} and ${email}. Please verify to complete registration.`,
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 400));
@@ -511,7 +511,7 @@ router.post(
 );
 
 // ----------------------------
-// Get Seller (Profile) (for seller dashboard)
+// Get Seller Profile (for seller dashboard)
 // ----------------------------
 router.get(
   "/getSeller",
@@ -574,7 +574,7 @@ router.get(
 );
 
 // ----------------------------
-// Update Shop Avatar
+// Update Shop Avatar (if needed)
 // ----------------------------
 router.put(
   "/update-shop-avatar",
@@ -586,8 +586,11 @@ router.put(
         return next(new ErrorHandler("Please provide a new avatar", 400));
       }
       
-      const imageId = existsSeller.avatar.public_id;
-      await cloudinary.v2.uploader.destroy(imageId);
+      // Delete old avatar (if any)
+      if (existsSeller.avatar.public_id) {
+        await cloudinary.v2.uploader.destroy(existsSeller.avatar.public_id);
+      }
+      
       const myCloud = await cloudinary.v2.uploader.upload(req.body.avatar, {
         folder: "avatars",
         width: 150,
@@ -611,7 +614,7 @@ router.put(
 );
 
 // ----------------------------
-// Update Seller Info (Profile)
+// Update Seller Info (Profile Update)
 // ----------------------------
 router.put(
   "/update-seller-info",
@@ -651,9 +654,7 @@ router.get(
   isAdmin("Admin"),
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const sellers = await Shop.find().sort({
-        createdAt: -1,
-      });
+      const sellers = await Shop.find().sort({ createdAt: -1 });
       res.status(201).json({
         success: true,
         sellers,
@@ -697,9 +698,11 @@ router.put(
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { withdrawMethod } = req.body;
-      const seller = await Shop.findByIdAndUpdate(req.seller._id, {
-        withdrawMethod,
-      }, { new: true });
+      const seller = await Shop.findByIdAndUpdate(
+        req.seller._id,
+        { withdrawMethod },
+        { new: true }
+      );
       res.status(201).json({
         success: true,
         seller,
@@ -735,4 +738,3 @@ router.delete(
 );
 
 module.exports = router;
-
