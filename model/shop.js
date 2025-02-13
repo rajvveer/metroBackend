@@ -32,14 +32,15 @@ const shopSchema = new mongoose.Schema({
     type: String,
     default: "Seller",
   },
+  // Avatar is no longer required; default to empty strings.
   avatar: {
     public_id: {
       type: String,
-      required: true,
+      default: "",
     },
     url: {
       type: String,
-      required: true,
+      default: "",
     },
   },
   zipCode: {
@@ -65,7 +66,7 @@ const shopSchema = new mongoose.Schema({
       },
       createdAt: {
         type: Date,
-        default: Date.now(),
+        default: Date.now,
       },
       updatedAt: {
         type: Date,
@@ -74,7 +75,7 @@ const shopSchema = new mongoose.Schema({
   ],
   createdAt: {
     type: Date,
-    default: Date.now(),
+    default: Date.now,
   },
   resetPasswordToken: String,
   resetPasswordTime: Date,
@@ -83,19 +84,19 @@ const shopSchema = new mongoose.Schema({
 // Hash password
 shopSchema.pre("save", async function (next) {
   if (!this.isModified("password")) {
-    next();
+    return next();
   }
   this.password = await bcrypt.hash(this.password, 10);
 });
 
-// jwt token
+// Generate JWT token
 shopSchema.methods.getJwtToken = function () {
   return jwt.sign({ id: this._id }, process.env.JWT_SECRET_KEY, {
     expiresIn: process.env.JWT_EXPIRES,
   });
 };
 
-// comapre password
+// Compare password
 shopSchema.methods.comparePassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
