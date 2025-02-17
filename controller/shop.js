@@ -458,42 +458,37 @@ router.post(
   "/verify-otp",
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const { registrationToken, otp } = req.body;
-      if (!registrationToken || !otp) {
-        return next(new ErrorHandler("Registration token and OTP are required", 400));
+      const { phoneNumber, otp } = req.body;
+      if (!phoneNumber || !otp) {
+        return next(new ErrorHandler("Both phone number and OTP are required", 400));
       }
-      
-      // Decode registration data from the token
-      let registrationData;
-      try {
-        registrationData = jwt.verify(registrationToken, process.env.REGISTRATION_SECRET || process.env.JWT_SECRET_KEY);
-      } catch (err) {
-        return next(new ErrorHandler("Registration token is invalid or has expired", 400));
+
+      const shop = await Shop.findOne({ phoneNumber });
+      if (!shop) {
+        return next(new ErrorHandler("Shop not found. Please register first.", 404));
       }
-      
-      // Compare OTP values (convert to strings)
-      if (registrationData.otp.toString() !== otp.toString()) {
+
+      // Convert both values to strings to avoid type mismatch
+      const providedOtp = otp.toString();
+      const storedOtp = shop.otp ? shop.otp.toString() : "";
+
+      console.log("Stored OTP:", storedOtp); // For debugging
+      console.log("Provided OTP:", providedOtp); // For debugging
+
+      if (storedOtp !== providedOtp) {
         return next(new ErrorHandler("Invalid OTP", 400));
       }
-      
-      if (registrationData.otpExpiration < Date.now()) {
+
+      if (shop.otpExpiration < Date.now()) {
         return next(new ErrorHandler("OTP has expired", 400));
       }
-      
-      // Create the shop document in the Shop collection with isVerified true
-      const shopData = {
-        name: registrationData.name,
-        email: registrationData.email,
-        password: registrationData.password,
-        avatar: registrationData.avatar,
-        address: registrationData.address,
-        phoneNumber: registrationData.phoneNumber,
-        zipCode: registrationData.zipCode,
-        isVerified: true,
-      };
-      
-      const shop = await Shop.create(shopData);
-      
+
+      // OTP is valid – mark shop as verified and clear OTP fields
+      shop.isVerified = true;
+      shop.otp = undefined;
+      shop.otpExpiration = undefined;
+      await shop.save();
+
       // Issue JWT token for the seller
       sendShopToken(shop, 201, res);
     } catch (error) {
