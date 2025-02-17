@@ -376,15 +376,17 @@ const sendShopToken = require("../utils/shopToken");
 const { isAuthenticated, isSeller, isAdmin } = require("../middleware/auth");
 
 // ----------------------------
-// Seller Registration with OTP sent to both email and mobile
+// Seller Registration with OTP (No pending document)
 // ----------------------------
+// In this endpoint, we don't create a Shop document yet.
+// Instead, we generate a temporary registration token that encodes all the registration data (including the OTP).
 router.post(
   "/create-shop",
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { email, phoneNumber } = req.body;
       
-      // Check if a shop with the provided email or phone already exists
+      // Check if a shop with the provided email or phone already exists in the main Shop collection
       const existingShop = await Shop.findOne({
         $or: [{ email }, { phoneNumber }]
       });
@@ -406,10 +408,10 @@ router.post(
       
       // Generate a random 6-digit OTP and expiry (5 minutes)
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      const otpExpiry = Date.now() + 5 * 60 * 1000;
+      const otpExpiry = Date.now() + 5 * 60 * 1000; // 5 minutes expiry
       
-      // Create the seller document with isVerified set to false
-      const shopData = {
+      // Build registration payload
+      const registrationData = {
         name: req.body.name,
         email,
         password: req.body.password,
@@ -417,12 +419,16 @@ router.post(
         address: req.body.address,
         phoneNumber,
         zipCode: req.body.zipCode,
-        isVerified: false,
         otp,
-        otpExpiration: otpExpiry,
+        otpExpiration: otpExpiry
       };
       
-      const shop = await Shop.create(shopData);
+      // Sign a temporary registration token (valid for 10 minutes)
+      const registrationToken = jwt.sign(
+        registrationData,
+        process.env.REGISTRATION_SECRET || process.env.JWT_SECRET_KEY,
+        { expiresIn: "10m" }
+      );
       
       // Send OTP via mobile and email
       await sendOtp(phoneNumber, otp);
@@ -432,9 +438,11 @@ router.post(
         message: `Hello ${req.body.name}, your OTP is ${otp}. It is valid for 5 minutes.`
       });
       
+      // Return the registration token (client must save it and use it in the verify-otp call)
       res.status(201).json({
         success: true,
         message: `OTP sent to ${phoneNumber} and ${email}. Please verify to complete registration.`,
+        registrationToken
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 400));
@@ -443,44 +451,49 @@ router.post(
 );
 
 // ----------------------------
-// Verify OTP for Shop Registration
+// Verify OTP and Create Shop
 // ----------------------------
-// Verify OTP for Shop Registration
+// Client must provide the registration token (from /create-shop) and the OTP.
 router.post(
   "/verify-otp",
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const { phoneNumber, otp } = req.body;
-      if (!phoneNumber || !otp) {
-        return next(new ErrorHandler("Both phone number and OTP are required", 400));
+      const { registrationToken, otp } = req.body;
+      if (!registrationToken || !otp) {
+        return next(new ErrorHandler("Registration token and OTP are required", 400));
       }
-
-      const shop = await Shop.findOne({ phoneNumber });
-      if (!shop) {
-        return next(new ErrorHandler("Shop not found. Please register first.", 404));
+      
+      // Decode registration data from the token
+      let registrationData;
+      try {
+        registrationData = jwt.verify(registrationToken, process.env.REGISTRATION_SECRET || process.env.JWT_SECRET_KEY);
+      } catch (err) {
+        return next(new ErrorHandler("Registration token is invalid or has expired", 400));
       }
-
-      // Convert both values to strings to avoid type mismatch
-      const providedOtp = otp.toString();
-      const storedOtp = shop.otp ? shop.otp.toString() : "";
-
-      console.log("Stored OTP:", storedOtp); // For debugging
-      console.log("Provided OTP:", providedOtp); // For debugging
-
-      if (storedOtp !== providedOtp) {
+      
+      // Compare OTP values (convert to strings)
+      if (registrationData.otp.toString() !== otp.toString()) {
         return next(new ErrorHandler("Invalid OTP", 400));
       }
-
-      if (shop.otpExpiration < Date.now()) {
+      
+      if (registrationData.otpExpiration < Date.now()) {
         return next(new ErrorHandler("OTP has expired", 400));
       }
-
-      // OTP is valid – mark shop as verified and clear OTP fields
-      shop.isVerified = true;
-      shop.otp = undefined;
-      shop.otpExpiration = undefined;
-      await shop.save();
-
+      
+      // Create the shop document in the Shop collection with isVerified true
+      const shopData = {
+        name: registrationData.name,
+        email: registrationData.email,
+        password: registrationData.password,
+        avatar: registrationData.avatar,
+        address: registrationData.address,
+        phoneNumber: registrationData.phoneNumber,
+        zipCode: registrationData.zipCode,
+        isVerified: true,
+      };
+      
+      const shop = await Shop.create(shopData);
+      
       // Issue JWT token for the seller
       sendShopToken(shop, 201, res);
     } catch (error) {
@@ -488,7 +501,6 @@ router.post(
     }
   })
 );
-
 
 // ----------------------------
 // Seller Login
@@ -747,3 +759,4 @@ router.delete(
 );
 
 module.exports = router;
+
