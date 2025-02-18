@@ -522,7 +522,7 @@ router.post(
         return next(new ErrorHandler("Please provide the correct information", 400));
       }
 
-      sendShopToken(user, 201, res);
+      sendShopToken(user, 200, res);
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
