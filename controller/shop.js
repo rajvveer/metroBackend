@@ -376,24 +376,20 @@ const sendShopToken = require("../utils/shopToken");
 const { isAuthenticated, isSeller, isAdmin } = require("../middleware/auth");
 
 // ----------------------------
-// Seller Registration with OTP (No pending document)
+// Seller Registration with OTP using Registration Token (Delayed Creation)
 // ----------------------------
-// In this endpoint, we don't create a Shop document yet.
-// Instead, we generate a temporary registration token that encodes all the registration data (including the OTP).
 router.post(
   "/create-shop",
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { email, phoneNumber } = req.body;
-      
-      // Check if a shop with the provided email or phone already exists in the main Shop collection
-      const existingShop = await Shop.findOne({
-        $or: [{ email }, { phoneNumber }]
-      });
+
+      // Check if a shop with the provided email or phone already exists in the Shop collection
+      const existingShop = await Shop.findOne({ $or: [{ email }, { phoneNumber }] });
       if (existingShop) {
         return next(new ErrorHandler("Shop already exists", 400));
       }
-      
+
       // Upload avatar if provided; otherwise, use default empty values.
       let avatarData = { public_id: "", url: "" };
       if (req.body.avatar && req.body.avatar.trim() !== "") {
@@ -405,12 +401,12 @@ router.post(
           url: myCloud.secure_url,
         };
       }
-      
+
       // Generate a random 6-digit OTP and expiry (5 minutes)
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       const otpExpiry = Date.now() + 5 * 60 * 1000; // 5 minutes expiry
-      
-      // Build registration payload
+
+      // Build registration payload (do not create a Shop yet)
       const registrationData = {
         name: req.body.name,
         email,
@@ -420,29 +416,29 @@ router.post(
         phoneNumber,
         zipCode: req.body.zipCode,
         otp,
-        otpExpiration: otpExpiry
+        otpExpiration: otpExpiry,
       };
-      
+
       // Sign a temporary registration token (valid for 10 minutes)
       const registrationToken = jwt.sign(
         registrationData,
         process.env.REGISTRATION_SECRET || process.env.JWT_SECRET_KEY,
         { expiresIn: "10m" }
       );
-      
+
       // Send OTP via mobile and email
       await sendOtp(phoneNumber, otp);
       await sendMail({
         email,
         subject: "Your OTP for Shop Registration",
-        message: `Hello ${req.body.name}, your OTP is ${otp}. It is valid for 5 minutes.`
+        message: `Hello ${req.body.name}, your OTP is ${otp}. It is valid for 5 minutes.`,
       });
-      
-      // Return the registration token (client must save it and use it in the verify-otp call)
+
+      // Return the registration token (client stores it automatically)
       res.status(201).json({
         success: true,
         message: `OTP sent to ${phoneNumber} and ${email}. Please verify to complete registration.`,
-        registrationToken
+        registrationToken,
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 400));
@@ -453,41 +449,48 @@ router.post(
 // ----------------------------
 // Verify OTP and Create Shop
 // ----------------------------
-// Client must provide the registration token (from /create-shop) and the OTP.
 router.post(
   "/verify-otp",
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const { phoneNumber, otp } = req.body;
-      if (!phoneNumber || !otp) {
-        return next(new ErrorHandler("Both phone number and OTP are required", 400));
+      const { registrationToken, otp } = req.body;
+      if (!registrationToken || !otp) {
+        return next(new ErrorHandler("Registration token and OTP are required", 400));
       }
 
-      const shop = await Shop.findOne({ phoneNumber });
-      if (!shop) {
-        return next(new ErrorHandler("Shop not found. Please register first.", 404));
+      // Decode registration data from the token
+      let registrationData;
+      try {
+        registrationData = jwt.verify(
+          registrationToken,
+          process.env.REGISTRATION_SECRET || process.env.JWT_SECRET_KEY
+        );
+      } catch (err) {
+        return next(new ErrorHandler("Registration token is invalid or has expired", 400));
       }
 
-      // Convert both values to strings to avoid type mismatch
-      const providedOtp = otp.toString();
-      const storedOtp = shop.otp ? shop.otp.toString() : "";
-
-      console.log("Stored OTP:", storedOtp); // For debugging
-      console.log("Provided OTP:", providedOtp); // For debugging
-
-      if (storedOtp !== providedOtp) {
+      // Compare OTP values (convert to strings)
+      if (registrationData.otp.toString() !== otp.toString()) {
         return next(new ErrorHandler("Invalid OTP", 400));
       }
 
-      if (shop.otpExpiration < Date.now()) {
+      if (registrationData.otpExpiration < Date.now()) {
         return next(new ErrorHandler("OTP has expired", 400));
       }
 
-      // OTP is valid – mark shop as verified and clear OTP fields
-      shop.isVerified = true;
-      shop.otp = undefined;
-      shop.otpExpiration = undefined;
-      await shop.save();
+      // OTP is valid — create the shop document in the Shop collection
+      const shopData = {
+        name: registrationData.name,
+        email: registrationData.email,
+        password: registrationData.password,
+        avatar: registrationData.avatar,
+        address: registrationData.address,
+        phoneNumber: registrationData.phoneNumber,
+        zipCode: registrationData.zipCode,
+        isVerified: true,
+      };
+
+      const shop = await Shop.create(shopData);
 
       // Issue JWT token for the seller
       sendShopToken(shop, 201, res);
@@ -508,17 +511,17 @@ router.post(
       if (!email || !password) {
         return next(new ErrorHandler("Please provide all fields!", 400));
       }
-      
+
       const user = await Shop.findOne({ email }).select("+password");
       if (!user) {
         return next(new ErrorHandler("User doesn't exist!", 400));
       }
-      
+
       const isPasswordValid = await user.comparePassword(password);
       if (!isPasswordValid) {
         return next(new ErrorHandler("Please provide the correct information", 400));
       }
-      
+
       sendShopToken(user, 201, res);
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
@@ -538,10 +541,7 @@ router.get(
       if (!seller) {
         return next(new ErrorHandler("User doesn't exist", 400));
       }
-      res.status(200).json({
-        success: true,
-        seller,
-      });
+      res.status(200).json({ success: true, seller });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
@@ -556,10 +556,7 @@ router.get(
   catchAsyncErrors(async (req, res, next) => {
     try {
       const shop = await Shop.findById(req.params.id);
-      res.status(201).json({
-        success: true,
-        shop,
-      });
+      res.status(201).json({ success: true, shop });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
@@ -579,10 +576,7 @@ router.get(
         sameSite: "none",
         secure: true,
       });
-      res.status(201).json({
-        success: true,
-        message: "Log out successful!",
-      });
+      res.status(201).json({ success: true, message: "Log out successful!" });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
@@ -601,28 +595,25 @@ router.put(
       if (!req.body.avatar || req.body.avatar === "") {
         return next(new ErrorHandler("Please provide a new avatar", 400));
       }
-      
+
       // Delete old avatar (if any)
       if (existsSeller.avatar.public_id) {
         await cloudinary.v2.uploader.destroy(existsSeller.avatar.public_id);
       }
-      
+
       const myCloud = await cloudinary.v2.uploader.upload(req.body.avatar, {
         folder: "avatars",
         width: 150,
       });
-      
+
       existsSeller.avatar = {
         public_id: myCloud.public_id,
         url: myCloud.secure_url,
       };
-      
+
       await existsSeller.save();
-      
-      res.status(200).json({
-        success: true,
-        seller: existsSeller,
-      });
+
+      res.status(200).json({ success: true, seller: existsSeller });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
@@ -642,19 +633,16 @@ router.put(
       if (!shop) {
         return next(new ErrorHandler("User not found", 400));
       }
-      
+
       shop.name = name;
       shop.description = description;
       shop.address = address;
       shop.phoneNumber = phoneNumber;
       shop.zipCode = zipCode;
-      
+
       await shop.save();
-      
-      res.status(201).json({
-        success: true,
-        shop,
-      });
+
+      res.status(201).json({ success: true, shop });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
@@ -671,10 +659,7 @@ router.get(
   catchAsyncErrors(async (req, res, next) => {
     try {
       const sellers = await Shop.find().sort({ createdAt: -1 });
-      res.status(201).json({
-        success: true,
-        sellers,
-      });
+      res.status(201).json({ success: true, sellers });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
@@ -695,10 +680,7 @@ router.delete(
         return next(new ErrorHandler("Seller is not available with this id", 400));
       }
       await Shop.findByIdAndDelete(req.params.id);
-      res.status(201).json({
-        success: true,
-        message: "Seller deleted successfully!",
-      });
+      res.status(201).json({ success: true, message: "Seller deleted successfully!" });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
@@ -719,10 +701,7 @@ router.put(
         { withdrawMethod },
         { new: true }
       );
-      res.status(201).json({
-        success: true,
-        seller,
-      });
+      res.status(201).json({ success: true, seller });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
@@ -743,10 +722,7 @@ router.delete(
       }
       seller.withdrawMethod = null;
       await seller.save();
-      res.status(201).json({
-        success: true,
-        seller,
-      });
+      res.status(201).json({ success: true, seller });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
     }
