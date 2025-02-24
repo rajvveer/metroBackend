@@ -32,15 +32,15 @@ const userOtpSchema = new mongoose.Schema({
     url: { type: String, default: "" },
   },
   addresses: [
-    {
-      country: { type: String },
-      city: { type: String },
-      address1: { type: String },
-      address2: { type: String },
-      zipCode: { type: Number },
-      addressType: { type: String },
-    },
-  ],
+  {
+    city: { type: String },
+    address1: { type: String },
+    address2: { type: String },
+    villageName: { type: String },
+    phoneNumber: { type: String },
+    addressType: { type: String },
+  },
+],
   createdAt: {
     type: Date,
     default: Date.now,
