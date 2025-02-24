@@ -64,12 +64,20 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 
 // Set up CORS for your website domain
-app.use(
-  cors({
-    origin: "https://gravoapp.com",
-    credentials: true,
-  })
-);
+const allowedOrigins = ["https://gravoapp.com", "http://localhost:8081"];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like some mobile or testing scenarios)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+}));
+
 
 // Parse JSON bodies with an increased size limit
 app.use(express.json({ limit: "50mb" }));
