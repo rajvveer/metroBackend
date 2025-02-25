@@ -1,47 +1,51 @@
 const mongoose = require("mongoose");
 
 const orderSchema = new mongoose.Schema({
-    cart:{
+    cart: {
         type: Array,
         required: true,
     },
-    shippingAddress:{
+    shippingAddress: {
         type: Object,
         required: true,
     },
-    user:{
+    user: {
         type: Object,
         required: true,
     },
-    totalPrice:{
+    totalPrice: {
         type: Number,
         required: true,
     },
-    status:{
+    status: {
         type: String,
         default: "Processing",
     },
-    paymentInfo:{
-        id:{
+    paymentInfo: {
+        method: {
+            type: String,
+            required: true,  // "COD" or "Card/UPI"
+        },
+        razorpay_payment_id: {
             type: String,
         },
-        status: {
+        razorpay_order_id: {
             type: String,
         },
-        type:{
+        razorpay_signature: {
             type: String,
         },
     },
-    paidAt:{
+    paidAt: {
         type: Date,
-        default: Date.now(),
+        default: Date.now,
     },
     deliveredAt: {
         type: Date,
     },
-    createdAt:{
+    createdAt: {
         type: Date,
-        default: Date.now(),
+        default: Date.now,
     },
 });
 
