@@ -300,43 +300,173 @@ router.get(
     });
   })
 );
+// router.get(
+//   "/search",
+//   catchAsyncErrors(async (req, res, next) => {
+//     const { query, minRating, expressDelivery, sortBy } = req.query;
+//     let filter = {};
+
+//     if (query) {
+//       // Search both in name and category using $or
+//       filter.$or = [
+//         { name: { $regex: new RegExp(query, "i") } },
+//         { category: { $regex: new RegExp(query, "i") } }
+//       ];
+//     }
+
+//     // Optionally filter by minimum rating if provided
+//     if (minRating) {
+//       filter.rating = { $gte: Number(minRating) };
+//     }
+
+//     // Optionally filter for express delivery if provided
+//     if (expressDelivery === "true") {
+//       filter.expressDelivery = true;
+//     }
+
+//     // Fetch products matching the filter
+//     let products = await Product.find(filter).sort({ createdAt: -1 });
+
+//     // Apply client-side sorting if needed
+//     if (sortBy === "priceLowHigh") {
+//       products.sort((a, b) => a.discountPrice - b.discountPrice);
+//     } else if (sortBy === "priceHighLow") {
+//       products.sort((a, b) => b.discountPrice - a.discountPrice);
+//     }
+
+//     res.status(200).json({
+//       success: true,
+//       products,
+//     });
+//   })
+// );
 router.get(
   "/search",
   catchAsyncErrors(async (req, res, next) => {
-    const { query, minRating, expressDelivery, sortBy } = req.query;
+    const {
+      query,
+      page = 1,
+      limit = 20,
+      minRating,
+      expressDelivery,
+      inStock,
+      discounted,
+      freeShipping,
+      minPrice,
+      maxPrice,
+      category,
+      brands,
+      sortBy
+    } = req.query;
+    
+    // Initialize filter object
     let filter = {};
-
+    
+    // Basic search by query in name and description
     if (query) {
-      // Search both in name and category using $or
       filter.$or = [
         { name: { $regex: new RegExp(query, "i") } },
+        { description: { $regex: new RegExp(query, "i") } },
         { category: { $regex: new RegExp(query, "i") } }
       ];
     }
-
-    // Optionally filter by minimum rating if provided
+    
+    // Minimum rating filter
     if (minRating) {
-      filter.rating = { $gte: Number(minRating) };
+      filter.rating = { $gte: parseFloat(minRating) };
     }
-
-    // Optionally filter for express delivery if provided
+    
+    // Express delivery filter
     if (expressDelivery === "true") {
       filter.expressDelivery = true;
     }
-
-    // Fetch products matching the filter
-    let products = await Product.find(filter).sort({ createdAt: -1 });
-
-    // Apply client-side sorting if needed
-    if (sortBy === "priceLowHigh") {
-      products.sort((a, b) => a.discountPrice - b.discountPrice);
-    } else if (sortBy === "priceHighLow") {
-      products.sort((a, b) => b.discountPrice - a.discountPrice);
+    
+    // In-stock filter
+    if (inStock === "true") {
+      filter.stock = { $gt: 0 };
     }
-
+    
+    // Discounted items filter
+    if (discounted === "true") {
+      filter.discount = { $gt: 0 };
+    }
+    
+    // Free shipping filter
+    if (freeShipping === "true") {
+      filter.freeShipping = true;
+    }
+    
+    // Price range filters
+    if (minPrice && maxPrice) {
+      filter.discountPrice = { $gte: parseFloat(minPrice), $lte: parseFloat(maxPrice) };
+    } else if (minPrice) {
+      filter.discountPrice = { $gte: parseFloat(minPrice) };
+    } else if (maxPrice) {
+      filter.discountPrice = { $lte: parseFloat(maxPrice) };
+    }
+    
+    // Category filter
+    if (category) {
+      filter.category = category;
+    }
+    
+    // Brands filter - handle both single brand and multiple brands
+    if (brands) {
+      if (Array.isArray(brands)) {
+        filter.brand = { $in: brands };
+      } else {
+        filter.brand = brands;
+      }
+    }
+    
+    // Determine sort criteria
+    let sortOptions = {};
+    switch (sortBy) {
+      case "priceLowHigh":
+        sortOptions = { discountPrice: 1 };
+        break;
+      case "priceHighLow":
+        sortOptions = { discountPrice: -1 };
+        break;
+      case "rating":
+        sortOptions = { rating: -1 };
+        break;
+      case "newest":
+        sortOptions = { createdAt: -1 };
+        break;
+      default:
+        // For relevance or default, use a text score if query exists, otherwise newest first
+        if (query) {
+          // If using MongoDB text index
+          // filter.$text = { $search: query };
+          // sortOptions = { score: { $meta: "textScore" } };
+          sortOptions = { createdAt: -1 }; // Fallback sort
+        } else {
+          sortOptions = { createdAt: -1 };
+        }
+    }
+    
+    // Calculate pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+    
+    // Execute the query with pagination
+    const products = await Product.find(filter)
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limitNum);
+    
+    // Optional: Get total count for pagination metadata
+    const totalProducts = await Product.countDocuments(filter);
+    
     res.status(200).json({
       success: true,
       products,
+      totalProducts,
+      currentPage: pageNum,
+      totalPages: Math.ceil(totalProducts / limitNum),
+      hasMore: skip + products.length < totalProducts
     });
   })
 );
