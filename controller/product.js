@@ -62,50 +62,65 @@ router.put(
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { id } = req.params;
+      // Destructure shopId and images, and capture the rest of the fields
       const { shopId, images, ...updatedProductData } = req.body;
 
-      // Validate shopId and id
-      const shop = await Shop.findById(shopId);
-      if (!shop) {
-        return next(new ErrorHandler("Shop Id is invalid!", 400));
-      }
-
-      // Validate other input fields if necessary
-
-      // Check if the product exists
+      // First, get the existing product
       const existingProduct = await Product.findById(id);
       if (!existingProduct) {
         return next(new ErrorHandler("Product not found!", 404));
       }
 
-      // Update images on Cloudinary if new images are provided
+      // Validate shopId if provided; otherwise use the product's current shop
+      let shop = existingProduct.shop;
+      if (shopId) {
+        const foundShop = await Shop.findById(shopId);
+        if (!foundShop) {
+          return next(new ErrorHandler("Shop Id is invalid!", 400));
+        }
+        shop = foundShop;
+      }
+
+      // Process images: upload only new images (ones with base64 data)
       let updatedImages = existingProduct.images;
       if (images && images.length > 0) {
         const newImagesLinks = await Promise.all(
           images.map(async (image) => {
-            const result = await cloudinary.v2.uploader.upload(image, {
-              folder: "products",
-            });
-
-            return {
-              public_id: result.public_id,
-              url: result.secure_url,
-            };
+            // Check if the image is new by checking for a base64 prefix
+            if (image.url && image.url.startsWith("data:")) {
+              const result = await cloudinary.v2.uploader.upload(image.url, {
+                folder: "products",
+              });
+              return {
+                public_id: result.public_id,
+                url: result.secure_url,
+              };
+            }
+            // Otherwise, keep the existing image data
+            return image;
           })
         );
-
         updatedImages = newImagesLinks;
       }
 
-      // Update the product data
+      // Update product fields; add any additional fields you need
       existingProduct.name = updatedProductData.name || existingProduct.name;
-      existingProduct.description = updatedProductData.description || existingProduct.description;
-      // ... update other fields as needed
-
+      existingProduct.description =
+        updatedProductData.description || existingProduct.description;
+      existingProduct.details =
+        updatedProductData.details || existingProduct.details;
+      existingProduct.category =
+        updatedProductData.category || existingProduct.category;
+      existingProduct.tags = updatedProductData.tags || existingProduct.tags;
+      existingProduct.originalPrice =
+        updatedProductData.originalPrice || existingProduct.originalPrice;
+      existingProduct.discountPrice =
+        updatedProductData.discountPrice || existingProduct.discountPrice;
+      existingProduct.stock =
+        updatedProductData.stock || existingProduct.stock;
       existingProduct.images = updatedImages;
       existingProduct.shop = shop;
 
-      // Save the updated product
       const updatedProduct = await existingProduct.save();
 
       res.status(200).json({
@@ -113,10 +128,90 @@ router.put(
         product: updatedProduct,
       });
     } catch (error) {
-      return next(new ErrorHandler(error.message || "Something went wrong", 400));
+      return next(
+        new ErrorHandler(error.message || "Something went wrong", 400)
+      );
     }
   })
 );
+router.put(
+  "/edit-product/:id",
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      // Destructure shopId and images, and capture the rest of the fields
+      const { shopId, images, ...updatedProductData } = req.body;
+
+      // First, get the existing product
+      const existingProduct = await Product.findById(id);
+      if (!existingProduct) {
+        return next(new ErrorHandler("Product not found!", 404));
+      }
+
+      // Validate shopId if provided; otherwise use the product's current shop
+      let shop = existingProduct.shop;
+      if (shopId) {
+        const foundShop = await Shop.findById(shopId);
+        if (!foundShop) {
+          return next(new ErrorHandler("Shop Id is invalid!", 400));
+        }
+        shop = foundShop;
+      }
+
+      // Process images: upload only new images (ones with base64 data)
+      let updatedImages = existingProduct.images;
+      if (images && images.length > 0) {
+        const newImagesLinks = await Promise.all(
+          images.map(async (image) => {
+            // Check if the image is new by checking for a base64 prefix
+            if (image.url && image.url.startsWith("data:")) {
+              const result = await cloudinary.v2.uploader.upload(image.url, {
+                folder: "products",
+              });
+              return {
+                public_id: result.public_id,
+                url: result.secure_url,
+              };
+            }
+            // Otherwise, keep the existing image data
+            return image;
+          })
+        );
+        updatedImages = newImagesLinks;
+      }
+
+      // Update product fields; add any additional fields you need
+      existingProduct.name = updatedProductData.name || existingProduct.name;
+      existingProduct.description =
+        updatedProductData.description || existingProduct.description;
+      existingProduct.details =
+        updatedProductData.details || existingProduct.details;
+      existingProduct.category =
+        updatedProductData.category || existingProduct.category;
+      existingProduct.tags = updatedProductData.tags || existingProduct.tags;
+      existingProduct.originalPrice =
+        updatedProductData.originalPrice || existingProduct.originalPrice;
+      existingProduct.discountPrice =
+        updatedProductData.discountPrice || existingProduct.discountPrice;
+      existingProduct.stock =
+        updatedProductData.stock || existingProduct.stock;
+      existingProduct.images = updatedImages;
+      existingProduct.shop = shop;
+
+      const updatedProduct = await existingProduct.save();
+
+      res.status(200).json({
+        success: true,
+        product: updatedProduct,
+      });
+    } catch (error) {
+      return next(
+        new ErrorHandler(error.message || "Something went wrong", 400)
+      );
+    }
+  })
+);
+
 
 // get all products of a shop
 router.get(
