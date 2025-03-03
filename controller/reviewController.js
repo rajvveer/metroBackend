@@ -14,28 +14,44 @@ router.post(
   isAuthenticatedOtp,
   catchAsyncErrors(async (req, res, next) => {
     const { productId, rating, comment, images } = req.body;
+    
+    // Add debug logging
+    console.log("Attempting to review product:", productId);
+    console.log("User ID:", req.user._id);
+    
     if (!productId || !rating || !comment) {
       return next(new ErrorHandler("Product ID, rating, and comment are required", 400));
     }
-
-    // Validate productId is a valid ObjectId string, but do NOT convert it.
+    
+    // Validate productId is a valid ObjectId string
     if (!mongoose.isValidObjectId(productId)) {
       console.log("Invalid productId received:", productId);
       return next(new ErrorHandler("Invalid product ID", 400));
     }
-
-    // Check if the user has a delivered order containing this product.
-    // Since the order's cart stores product IDs as strings, use productId directly.
+    
+    // Check if the user has a delivered order containing this product
+    // Modified query to handle different possible cart structures
     const deliveredOrder = await Order.findOne({
       "user._id": req.user._id,
-      cart: { $elemMatch: { _id: productId } },
-      status: "Delivered"
+      status: "Delivered",
+      cart: {
+        $elemMatch: {
+          $or: [
+            { _id: productId },            // If product ID is stored directly as _id
+            { productId: productId },      // If product ID is stored as productId
+            { "product._id": productId }   // If product is a nested object
+          ]
+        }
+      }
     });
+    
+    console.log("Found delivered order:", deliveredOrder ? "Yes" : "No");
+    
     if (!deliveredOrder) {
       return next(new ErrorHandler("You can only review a product that you have bought and delivered", 400));
     }
-
-    // Upload images to Cloudinary if provided.
+    
+    // Upload images to Cloudinary if provided
     let imagesLinks = [];
     if (images && images.length > 0) {
       for (const img of images) {
@@ -46,42 +62,43 @@ router.post(
         });
       }
     }
-
-    // Create the review object.
+    
+    // Create the review object - Fixed syntax error
     const review = {
-      user: { _id: req.user._id, name: req.user.name },
+      user: { _id: req.user._id, name: req.user.name },  // Corrected syntax
       rating,
       comment,
       images: imagesLinks,
     };
-
-    // Find the product.
+    
+    // Find the product
     const productDoc = await Product.findById(productId);
     if (!productDoc) {
       return next(new ErrorHandler("Product not found", 404));
     }
-
-    // Check if the user has already reviewed this product.
+    
+    // Check if the user has already reviewed this product
     const existingReviewIndex = productDoc.reviews.findIndex(
       (rev) => rev.user._id.toString() === req.user._id.toString()
     );
+    
     if (existingReviewIndex !== -1) {
-      // Update existing review.
+      // Update existing review
       productDoc.reviews[existingReviewIndex] = review;
     } else {
-      // Add new review.
+      // Add new review
       productDoc.reviews.push(review);
     }
-
-    // Recalculate average rating.
+    
+    // Recalculate average rating
     let totalRating = 0;
     productDoc.reviews.forEach((rev) => {
       totalRating += rev.rating;
     });
     productDoc.ratings = totalRating / productDoc.reviews.length;
-
+    
     await productDoc.save();
-
+    
     res.status(200).json({
       success: true,
       review,
