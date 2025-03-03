@@ -117,8 +117,8 @@ const conversation = require("./controller/conversation");
 const message = require("./controller/message");
 const withdraw = require("./controller/withdraw");
 
-// Import the OTP routes for mobile app login
-const otpUser = require("./controller/otpUser");
+// Import the OTP routes for mobile app login (extract the router)
+const { router: otpUserRouter } = require("./controller/otpUser");
 
 // Import review routes (new controller)
 const reviewController = require("./controller/reviewController");
@@ -127,9 +127,8 @@ const reviewController = require("./controller/reviewController");
 // const admin = require("./controller/admin");
 
 // Mount routes
-app.use("/api/v2/user", user);      // Website user routes
-app.use("/api/v2/otp", otpUser);      // OTP endpoints for mobile app users
-// app.use("/api/v2/admin", admin);   // Admin routes (for later use)
+app.use("/api/v2/user", user);
+app.use("/api/v2/otp", otpUserRouter);
 app.use("/api/v2/conversation", conversation);
 app.use("/api/v2/message", message);
 app.use("/api/v2/order", order);
@@ -139,9 +138,10 @@ app.use("/api/v2/event", event);
 app.use("/api/v2/coupon", coupon);
 app.use("/api/v2/payment", payment);
 app.use("/api/v2/withdraw", withdraw);
-app.use("/api/v2/reviews", reviewController);  // New reviews endpoints
+app.use("/api/v2/reviews", reviewController);
 
 // Error handling middleware (must be last)
 app.use(ErrorHandler);
 
 module.exports = app;
+
