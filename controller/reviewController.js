@@ -6,7 +6,6 @@ const Order = require("../model/order");
 const cloudinary = require("cloudinary");
 const ErrorHandler = require("../utils/ErrorHandler");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
-// Import OTP authentication middleware from otpUser.js (adjust the path as needed)
 const { isAuthenticatedOtp } = require("./otpUser");
 
 // POST /api/v2/reviews/add-review
@@ -19,17 +18,14 @@ router.post(
       return next(new ErrorHandler("Product ID, rating, and comment are required", 400));
     }
 
-    // Validate productId as a valid ObjectId format
+    // Validate productId is a valid ObjectId string, but do NOT convert it.
     if (!mongoose.isValidObjectId(productId)) {
       console.log("Invalid productId received:", productId);
       return next(new ErrorHandler("Invalid product ID", 400));
     }
-    // Note: We won't convert productId to ObjectId for matching in the order,
-    // since in your DB the product _id is stored as a string in the order's cart.
-    // const productObjId = new mongoose.Types.ObjectId(productId);
 
     // Check if the user has a delivered order containing this product.
-    // Using the productId as a string for comparison.
+    // Since the order's cart stores product IDs as strings, use productId directly.
     const deliveredOrder = await Order.findOne({
       "user._id": req.user._id,
       cart: { $elemMatch: { _id: productId } },
