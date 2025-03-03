@@ -19,14 +19,12 @@ router.post(
       return next(new ErrorHandler("Product ID, rating, and comment are required", 400));
     }
 
-    // Convert and validate productId as a valid ObjectId
-    let productObjId;
-    try {
-      productObjId = mongoose.Types.ObjectId(productId);
-    } catch (error) {
+    // Validate productId as a valid ObjectId
+    if (!mongoose.isValidObjectId(productId)) {
       console.log("Invalid productId received:", productId);
       return next(new ErrorHandler("Invalid product ID", 400));
     }
+    const productObjId = mongoose.Types.ObjectId(productId);
 
     // Check if the user has a delivered order containing this product.
     const deliveredOrder = await Order.findOne({
