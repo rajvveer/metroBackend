@@ -24,13 +24,13 @@ router.post(
       console.log("Invalid productId received:", productId);
       return next(new ErrorHandler("Invalid product ID", 400));
     }
-    const productObjId = mongoose.Types.ObjectId(productId);
+    const productObjId = new mongoose.Types.ObjectId(productId);
 
     // Check if the user has a delivered order containing this product.
     const deliveredOrder = await Order.findOne({
       "user._id": req.user._id,
-      "cart": { $elemMatch: { _id: productObjId } },
-      status: "Delivered"
+      cart: { $elemMatch: { _id: productObjId } },
+      status: "Delivered",
     });
     if (!deliveredOrder) {
       return next(new ErrorHandler("You can only review a product that you have bought and delivered", 400));
