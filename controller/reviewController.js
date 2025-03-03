@@ -19,18 +19,21 @@ router.post(
       return next(new ErrorHandler("Product ID, rating, and comment are required", 400));
     }
 
-    // Validate productId as a valid ObjectId
+    // Validate productId as a valid ObjectId format
     if (!mongoose.isValidObjectId(productId)) {
       console.log("Invalid productId received:", productId);
       return next(new ErrorHandler("Invalid product ID", 400));
     }
-    const productObjId = new mongoose.Types.ObjectId(productId);
+    // Note: We won't convert productId to ObjectId for matching in the order,
+    // since in your DB the product _id is stored as a string in the order's cart.
+    // const productObjId = new mongoose.Types.ObjectId(productId);
 
     // Check if the user has a delivered order containing this product.
+    // Using the productId as a string for comparison.
     const deliveredOrder = await Order.findOne({
       "user._id": req.user._id,
-      cart: { $elemMatch: { _id: productObjId } },
-      status: "Delivered",
+      cart: { $elemMatch: { _id: productId } },
+      status: "Delivered"
     });
     if (!deliveredOrder) {
       return next(new ErrorHandler("You can only review a product that you have bought and delivered", 400));
