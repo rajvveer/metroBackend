@@ -6,8 +6,7 @@ const Order = require("../model/order");
 const cloudinary = require("cloudinary");
 const ErrorHandler = require("../utils/ErrorHandler");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
-
-// Import OTP authentication middleware from otpUser.js
+// Import OTP authentication middleware from otpUser.js (adjust the path as needed)
 const { isAuthenticatedOtp } = require("./otpUser");
 
 // POST /api/v2/reviews/add-review
@@ -20,11 +19,12 @@ router.post(
       return next(new ErrorHandler("Product ID, rating, and comment are required", 400));
     }
 
-    // Convert productId to ObjectId for comparison
+    // Convert and validate productId as a valid ObjectId
     let productObjId;
     try {
       productObjId = mongoose.Types.ObjectId(productId);
-    } catch (err) {
+    } catch (error) {
+      console.log("Invalid productId received:", productId);
       return next(new ErrorHandler("Invalid product ID", 400));
     }
 
@@ -50,7 +50,7 @@ router.post(
       }
     }
 
-    // Create review object.
+    // Create the review object.
     const review = {
       user: { _id: req.user._id, name: req.user.name },
       rating,
@@ -78,7 +78,9 @@ router.post(
 
     // Recalculate average rating.
     let totalRating = 0;
-    productDoc.reviews.forEach((rev) => totalRating += rev.rating);
+    productDoc.reviews.forEach((rev) => {
+      totalRating += rev.rating;
+    });
     productDoc.ratings = totalRating / productDoc.reviews.length;
 
     await productDoc.save();
