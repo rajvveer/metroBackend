@@ -7,7 +7,7 @@ const ErrorHandler = require("../utils/ErrorHandler");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 
 // Import OTP authentication middleware
-const { isAuthenticatedOtp } = require("../controller/otpUser");
+const { isAuthenticatedOtp } = require("./controller/otpUser");
 
 // POST /api/v2/reviews/add-review
 // A user can add or update a review for a product they bought and that has been delivered.
