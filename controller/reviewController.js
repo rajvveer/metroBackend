@@ -15,39 +15,49 @@ router.post(
   catchAsyncErrors(async (req, res, next) => {
     const { productId, rating, comment, images } = req.body;
     
-    // Add debug logging
-    console.log("Attempting to review product:", productId);
-    console.log("User ID:", req.user._id);
+    console.log("Review attempt - Product ID:", productId);
+    console.log("Review attempt - User ID:", req.user._id);
     
     if (!productId || !rating || !comment) {
       return next(new ErrorHandler("Product ID, rating, and comment are required", 400));
     }
     
-    // Validate productId is a valid ObjectId string
-    if (!mongoose.isValidObjectId(productId)) {
-      console.log("Invalid productId received:", productId);
-      return next(new ErrorHandler("Invalid product ID", 400));
-    }
-    
-    // Check if the user has a delivered order containing this product
-    // Modified query to handle different possible cart structures
-    const deliveredOrder = await Order.findOne({
+    // Manual check approach - find all delivered orders and check each cart item
+    const deliveredOrders = await Order.find({
       "user._id": req.user._id,
-      status: "Delivered",
-      cart: {
-        $elemMatch: {
-          $or: [
-            { _id: productId },            // If product ID is stored directly as _id
-            { productId: productId },      // If product ID is stored as productId
-            { "product._id": productId }   // If product is a nested object
-          ]
-        }
-      }
+      status: "Delivered"
     });
     
-    console.log("Found delivered order:", deliveredOrder ? "Yes" : "No");
+    console.log(`Found ${deliveredOrders.length} delivered orders for this user`);
     
-    if (!deliveredOrder) {
+    // Initialize a flag to track if we find the product
+    let productFound = false;
+    
+    // Check each order manually
+    for (const order of deliveredOrders) {
+      if (order.cart && Array.isArray(order.cart)) {
+        // Print cart items for debugging
+        console.log(`Order ${order._id} has ${order.cart.length} cart items`);
+        
+        // Check each cart item
+        for (const item of order.cart) {
+          const cartItemId = item._id ? item._id.toString() : '';
+          console.log(`Cart item ID: "${cartItemId}", Product ID: "${productId}"`);
+          
+          // Compare as strings
+          if (cartItemId === productId) {
+            productFound = true;
+            console.log("MATCH FOUND!");
+            break;
+          }
+        }
+      }
+      
+      if (productFound) break;
+    }
+    
+    // If the product wasn't found in any delivered order, return error
+    if (!productFound) {
       return next(new ErrorHandler("You can only review a product that you have bought and delivered", 400));
     }
     
@@ -63,9 +73,9 @@ router.post(
       }
     }
     
-    // Create the review object - Fixed syntax error
+    // Create the review object with correct syntax
     const review = {
-      user: { _id: req.user._id, name: req.user.name },  // Corrected syntax
+      user: { _id: req.user._id, name: req.user.name },
       rating,
       comment,
       images: imagesLinks,
