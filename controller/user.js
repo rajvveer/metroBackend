@@ -502,6 +502,120 @@ router.post(
     });
   })
 );
+// POST /add-review: Add a review for a product
+router.post(
+  "/add-review",
+  isAuthenticated,
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const { productId, rating, comment } = req.body;
+
+      if (!productId || !rating || !comment) {
+        return next(
+          new ErrorHandler("Please provide productId, rating, and comment", 400)
+        );
+      }
+
+      // Check if the product exists
+      const product = await Product.findById(productId);
+      if (!product) {
+        return next(new ErrorHandler("Product not found", 404));
+      }
+
+      // Check if the user has bought and received the product.
+      // Adjust the query based on your Order model schema.
+      const order = await Order.findOne({
+        user: req.user._id,
+        orderStatus: "Delivered",
+        "orderItems.product": productId,
+      });
+      if (!order) {
+        return next(
+          new ErrorHandler(
+            "You can only review products that you have bought and that have been delivered",
+            400
+          )
+        );
+      }
+
+      // Check if the user has already reviewed this product.
+      const alreadyReviewed = product.reviews.find(
+        (rev) => rev.user.toString() === req.user._id.toString()
+      );
+      if (alreadyReviewed) {
+        return next(new ErrorHandler("You have already reviewed this product", 400));
+      }
+
+      // Process optional review images if provided.
+      let reviewImages = [];
+      if (req.body.images) {
+        let images = [];
+        if (typeof req.body.images === "string") {
+          images.push(req.body.images);
+        } else {
+          images = req.body.images;
+        }
+
+        // Upload each image to Cloudinary (folder: reviews)
+        for (let i = 0; i < images.length; i++) {
+          const result = await cloudinary.v2.uploader.upload(images[i], {
+            folder: "reviews",
+          });
+          reviewImages.push({
+            public_id: result.public_id,
+            url: result.secure_url,
+          });
+        }
+      }
+
+      // Create the review object
+      const review = {
+        user: req.user._id,
+        name: req.user.name,
+        rating: Number(rating),
+        comment,
+        images: reviewImages,
+      };
+
+      // Add the review to the product's reviews array.
+      product.reviews.push(review);
+
+      // Optionally update product's overall ratings and review count.
+      product.numOfReviews = product.reviews.length;
+      product.ratings =
+        product.reviews.reduce((acc, item) => item.rating + acc, 0) /
+        product.reviews.length;
+
+      await product.save();
+
+      res.status(201).json({
+        success: true,
+        message: "Review added successfully",
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  })
+);
+
+// GET /get-reviews/:productId: Retrieve all reviews for a product
+router.get(
+  "/get-reviews/:productId",
+  catchAsyncErrors(async (req, res, next) => {
+    try {
+      const product = await Product.findById(req.params.productId);
+      if (!product) {
+        return next(new ErrorHandler("Product not found", 404));
+      }
+      res.status(200).json({
+        success: true,
+        reviews: product.reviews,
+      });
+    } catch (error) {
+      return next(new ErrorHandler(error.message, 500));
+    }
+  })
+);
 
 // Function to send OTP via SMS using Twilio
 // async function sendOTP(mobileNumber, otp) {
