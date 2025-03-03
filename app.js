@@ -57,27 +57,28 @@
 // app.js
 // app.js
 const express = require("express");
-const ErrorHandler = require("./middleware/error");
 const app = express();
 const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+const ErrorHandler = require("./middleware/error");
 
 // Set up CORS for your website domain
 const allowedOrigins = ["https://gravoapp.com", "http://localhost:8081"];
 
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like some mobile or testing scenarios)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    return callback(new Error("Not allowed by CORS"));
-  },
-  credentials: true,
-}));
-
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like some mobile or testing scenarios)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  })
+);
 
 // Parse JSON bodies with an increased size limit
 app.use(express.json({ limit: "50mb" }));
@@ -104,7 +105,7 @@ if (process.env.NODE_ENV !== "PRODUCTION") {
   });
 }
 
-// Import routes for website users
+// Import routes for website users and others
 const user = require("./controller/user");
 const shop = require("./controller/shop");
 const product = require("./controller/product");
@@ -118,6 +119,9 @@ const withdraw = require("./controller/withdraw");
 
 // Import the OTP routes for mobile app login
 const otpUser = require("./controller/otpUser");
+
+// Import review routes (new controller)
+const reviewController = require("./controller/reviewController");
 
 // (Optional) Import admin routes if needed later
 // const admin = require("./controller/admin");
@@ -135,6 +139,7 @@ app.use("/api/v2/event", event);
 app.use("/api/v2/coupon", coupon);
 app.use("/api/v2/payment", payment);
 app.use("/api/v2/withdraw", withdraw);
+app.use("/api/v2/reviews", reviewController);  // New reviews endpoints
 
 // Error handling middleware (must be last)
 app.use(ErrorHandler);
