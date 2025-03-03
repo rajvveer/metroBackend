@@ -22,29 +22,21 @@ router.post(
       return next(new ErrorHandler("Product ID, rating, and comment are required", 400));
     }
     
-    // Manual check approach - find all delivered orders and check each cart item
+    // Convert req.user._id to string to match the stored type in MongoDB
     const deliveredOrders = await Order.find({
-      "user._id": req.user._id,
+      "user._id": req.user._id.toString(),
       status: "Delivered"
     });
     
     console.log(`Found ${deliveredOrders.length} delivered orders for this user`);
     
-    // Initialize a flag to track if we find the product
     let productFound = false;
-    
-    // Check each order manually
     for (const order of deliveredOrders) {
       if (order.cart && Array.isArray(order.cart)) {
-        // Print cart items for debugging
         console.log(`Order ${order._id} has ${order.cart.length} cart items`);
-        
-        // Check each cart item
         for (const item of order.cart) {
           const cartItemId = item._id ? item._id.toString() : '';
           console.log(`Cart item ID: "${cartItemId}", Product ID: "${productId}"`);
-          
-          // Compare as strings
           if (cartItemId === productId) {
             productFound = true;
             console.log("MATCH FOUND!");
@@ -52,11 +44,9 @@ router.post(
           }
         }
       }
-      
       if (productFound) break;
     }
     
-    // If the product wasn't found in any delivered order, return error
     if (!productFound) {
       return next(new ErrorHandler("You can only review a product that you have bought and delivered", 400));
     }
@@ -73,7 +63,6 @@ router.post(
       }
     }
     
-    // Create the review object with correct syntax
     const review = {
       user: { _id: req.user._id, name: req.user.name },
       rating,
