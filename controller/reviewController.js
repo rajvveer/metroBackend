@@ -1,17 +1,16 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 const Product = require("../model/product");
 const Order = require("../model/order");
 const cloudinary = require("cloudinary");
 const ErrorHandler = require("../utils/ErrorHandler");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 
-// Import OTP authentication middleware
+// Import OTP authentication middleware from otpUser.js
 const { isAuthenticatedOtp } = require("./otpUser");
 
 // POST /api/v2/reviews/add-review
-// A user can add or update a review for a product they bought and that has been delivered.
-// Optional images are uploaded to Cloudinary.
 router.post(
   "/add-review",
   isAuthenticatedOtp,
@@ -21,10 +20,18 @@ router.post(
       return next(new ErrorHandler("Product ID, rating, and comment are required", 400));
     }
 
+    // Convert productId to ObjectId for comparison
+    let productObjId;
+    try {
+      productObjId = mongoose.Types.ObjectId(productId);
+    } catch (err) {
+      return next(new ErrorHandler("Invalid product ID", 400));
+    }
+
     // Check if the user has a delivered order containing this product.
     const deliveredOrder = await Order.findOne({
       "user._id": req.user._id,
-      "cart": { $elemMatch: { _id: productId } },
+      "cart": { $elemMatch: { _id: productObjId } },
       status: "Delivered"
     });
     if (!deliveredOrder) {
@@ -35,9 +42,7 @@ router.post(
     let imagesLinks = [];
     if (images && images.length > 0) {
       for (const img of images) {
-        const result = await cloudinary.v2.uploader.upload(img, {
-          folder: "reviews",
-        });
+        const result = await cloudinary.v2.uploader.upload(img, { folder: "reviews" });
         imagesLinks.push({
           public_id: result.public_id,
           url: result.secure_url,
@@ -45,7 +50,7 @@ router.post(
       }
     }
 
-    // Create the review object.
+    // Create review object.
     const review = {
       user: { _id: req.user._id, name: req.user.name },
       rating,
@@ -59,15 +64,15 @@ router.post(
       return next(new ErrorHandler("Product not found", 404));
     }
 
-    // Check if a review by this user already exists.
+    // Check if the user has already reviewed this product.
     const existingReviewIndex = productDoc.reviews.findIndex(
       (rev) => rev.user._id.toString() === req.user._id.toString()
     );
     if (existingReviewIndex !== -1) {
-      // Update the existing review.
+      // Update existing review.
       productDoc.reviews[existingReviewIndex] = review;
     } else {
-      // Add the new review.
+      // Add new review.
       productDoc.reviews.push(review);
     }
 
@@ -87,7 +92,6 @@ router.post(
 );
 
 // GET /api/v2/reviews/get-reviews/:productId
-// Returns all reviews for a given product.
 router.get(
   "/get-reviews/:productId",
   catchAsyncErrors(async (req, res, next) => {
