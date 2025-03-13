@@ -111,7 +111,8 @@ router.put(
       if (req.body.status === "Delivered") {
         order.deliveredAt = Date.now();
         order.paymentInfo.status = "Succeeded";
-        const serviceCharge = order.totalPrice * 0.10;
+        // Calculate a 5% service charge and update seller info with the remaining amount (95%)
+        const serviceCharge = order.totalPrice * 0.05;
         await updateSellerInfo(order.totalPrice - serviceCharge);
       }
 
@@ -134,7 +135,7 @@ router.put(
       async function updateSellerInfo(amount) {
         const seller = await Shop.findById(req.seller.id);
         
-        // Update seller's balance by adding the new amount to the existing balance
+        // Add the amount to the seller's current balance
         seller.availableBalance += amount;
 
         await seller.save();
