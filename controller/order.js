@@ -14,7 +14,7 @@ router.post(
     try {
       const { cart, shippingAddress, user, totalPrice, paymentInfo } = req.body;
 
-      //   group cart items by shopId
+      // group cart items by shopId
       const shopItemsMap = new Map();
 
       for (const item of cart) {
@@ -111,7 +111,7 @@ router.put(
       if (req.body.status === "Delivered") {
         order.deliveredAt = Date.now();
         order.paymentInfo.status = "Succeeded";
-        const serviceCharge = order.totalPrice * .10;
+        const serviceCharge = order.totalPrice * 0.10;
         await updateSellerInfo(order.totalPrice - serviceCharge);
       }
 
@@ -134,7 +134,8 @@ router.put(
       async function updateSellerInfo(amount) {
         const seller = await Shop.findById(req.seller.id);
         
-        seller.availableBalance = amount;
+        // Update seller's balance by adding the new amount to the existing balance
+        seller.availableBalance += amount;
 
         await seller.save();
       }
@@ -231,6 +232,7 @@ router.get(
     }
   })
 );
+
 // Get single order by ID
 router.get(
   "/get-order/:orderId",
@@ -249,6 +251,5 @@ router.get(
     }
   })
 );
-
 
 module.exports = router;
